@@ -1,4 +1,4 @@
-# 1 "/var/folders/96/v_l40xh56t74ymwrdnrq84d80000gn/T/tmphtrfbiq3"
+# 1 "/var/folders/96/v_l40xh56t74ymwrdnrq84d80000gn/T/tmp1brlxmbq"
 #include <Arduino.h>
 # 1 "/Users/mark/projects/lnbits/LNbits-TPoS-Printer/src/main.ino"
 #include <WiFi.h>
@@ -53,7 +53,7 @@ void makeHttpRequest() {
 void printConnectedToWifi() {
   String receipt = R"(
 
-    Connected to WiFi 
+      Connected to WiFi 
     $$ssid
 ************************
 
@@ -89,8 +89,11 @@ void deserializeAndCompare(String json) {
     Serial.println("Tag: " + tag);
     String memo = value["memo"].as<String>();
     Serial.println("Memo: " + memo);
+    String pending = value["pending"].as<String>();
 
     if (
+      pending == "false"
+      &&
       tag == "tpos"
       &&
       memo.indexOf("tip") == -1

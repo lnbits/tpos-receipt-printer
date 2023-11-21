@@ -43,7 +43,7 @@ void makeHttpRequest() {
 void printConnectedToWifi() {
   String receipt = R"(
 
-    Connected to WiFi 
+      Connected to WiFi 
     $$ssid
 ************************
 
@@ -79,8 +79,11 @@ void deserializeAndCompare(String json) {
     Serial.println("Tag: " + tag);
     String memo = value["memo"].as<String>();
     Serial.println("Memo: " + memo);
+    String pending = value["pending"].as<String>();
 
     if (
+      pending == "false"
+      &&
       tag == "tpos"
       &&
       memo.indexOf("tip") == -1
