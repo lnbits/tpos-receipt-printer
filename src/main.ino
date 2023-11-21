@@ -139,7 +139,6 @@ void printReceipt() {
 
    String receipt = R"(
 
-
 ************************
     PAYMENT RECEIVED
 ************************
@@ -185,9 +184,9 @@ Fee:   $$fee sats
     // search and replace in receipt
     receipt.replace("$$time", time);
     receipt.replace("$$memo", memo);
-    receipt.replace("$$amount", String(amountMSats / 1000));
+    receipt.replace("$$amount", String(amountMSats / 1000 - tipAmount));
     receipt.replace("$$tip", String(tipAmount));
-    receipt.replace("$$total", String(amountMSats / 1000 + tipAmount));
+    receipt.replace("$$total", String(amountMSats / 1000));
     receipt.replace("$$fee", String(fee));
 
 
