@@ -1,0 +1,10 @@
+#ifndef config_h
+#define config_h
+
+const char* companyName = "LNbits";
+const char* ssid = "[wifi ssid]";
+const char* password = "[wifi password]";
+const char* host = "legend.lnbits.com";
+const char* walletId = "[lnbits wallet id]";
+
+#endif

@@ -1,5 +1,5 @@
+#include "config.h"
 #include <WiFi.h>
-// #include "qrencode.h"
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include "Adafruit_Thermal.h"
@@ -12,12 +12,7 @@
 HardwareSerial mySerial(1); // Declare HardwareSerial obj first
 Adafruit_Thermal printer(&mySerial);     // Pass addr to printer constructor
 
-const char* ssid = "PLUSNET-MWC9Q2";
-const char* password = "4NyMeXtNcQ6rqP";
-
 WebSocketsClient webSocket;
-
-const char* webSocketServer = "wss://legend.lnbits.com/api/v1/ws/845ad088a1604d96ba039b7d6efe87ab";
 
 bool hasReceiptToPrint = false;
 
@@ -27,7 +22,6 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   switch(type) {
     case WStype_DISCONNECTED:
       Serial.printf("[WebSocket] Disconnected!\n");
-     
       break;
     case WStype_CONNECTED:
       Serial.printf("[WebSocket] Connected to url: %s\n", payload);
@@ -39,57 +33,11 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   }
 }
 
-// void printQR(String message) {
-
-//   // new line
-//   printer.print("\n");
-//   printer.print("\n");
-
-//   // zero line spacing
-//   printer.write(27);
-//   printer.write(51);
-//   printer.write((byte)0);
-  
-//   // center-align
-//   printer.write(27);
-//   printer.write(97);
-//   printer.write(49);
-  
-//   // create QR code
-//   message.toCharArray((char *)strinbuf,47);
-//   qrencode();
-  
-//   // print QR Code
-//   for (byte x = 0; x < WD; x+=2) {
-//     for (byte y = 0; y < WD; y++) {
-//       if ( QRBIT(x,y) &&  QRBIT((x+1),y)) { printer.write(219); }  // black square on top of black square
-//       if (!QRBIT(x,y) &&  QRBIT((x+1),y)) { printer.write(220); }  // white square on top of black square
-//       if ( QRBIT(x,y) && !QRBIT((x+1),y)) { printer.write(223); }  // black square on top of white square
-//       if (!QRBIT(x,y) && !QRBIT((x+1),y)) { printer.print(" "); }  // white square on top of white square
-//     }
-//     printer.write(10);  // next line
-//   }
-  
-//   // default line spacing
-//   printer.write(27);
-//   printer.write(50); 
-  
-//   // default-align (left)
-//   printer.write(27);
-//   printer.write(97);
-//   printer.write(48);
-
-//   // new line
-//   printer.print("\n");
-//   printer.print("\n");
-  
-// }
-
 void printConnectedToWifi() {
   String receipt = R"(
 
-      Connected to WiFi 
-    $$ssid
+ Connected to WiFi
+ $$ssid
 ************************
 
 
@@ -103,12 +51,17 @@ void printConnectedToWifi() {
 void printWelcomeReceipt() {
   String receipt = R"(
 ************************
-    Welcome to LNbits 
-    )";
+ LNbits
+ TPoS Receipt Printer
+ $$companyName
+)";
+
+    receipt.replace("$$companyName", companyName);
   
     printer.wake();
     printer.print(receipt);
-    // printQR("TEST");
+
+   
     printer.sleep();
   }
 
@@ -149,11 +102,11 @@ String unixTimeStampToDateTime(long timestamp) {
   struct tm * timeinfo;
   timeinfo = localtime(&timestamp);
   char date[20];
-  strftime(date, 20, "%b %d %Y", timeinfo);
+  strftime(date, 20, "%b %d, %Y", timeinfo);
 
   // Convert timestamp to Time
   char time[20];
-  strftime(time, 20, "%I:%M%p", timeinfo);
+  strftime(time, 20, "%H:%M", timeinfo);
 
   String dateTime = String(date) + " at " + String(time);
   return dateTime;
@@ -166,7 +119,8 @@ void printReceipt() {
    String receipt = R"(
 
 ************************
-    PAYMENT RECEIVED
+  $$companyName
+  PAYMENT RECEIVED
 ************************
 
 $$time
@@ -175,11 +129,11 @@ $$memo
 
 Amount: $$amount sats
 Tip:    $$tip sats
-
+----
 Total:  $$total sats
 
-Fee:   $$fee sats
-
+************************
+    Thank you!
 ************************
 
 
@@ -208,6 +162,7 @@ Fee:   $$fee sats
     Serial.println("Fee: " + String(fee));
 
     // search and replace in receipt
+    receipt.replace("$$companyName", companyName);
     receipt.replace("$$time", time);
     receipt.replace("$$memo", memo);
     receipt.replace("$$amount", String(amountMSats / 1000 - tipAmount));
@@ -242,10 +197,10 @@ void setup() {
     Serial.println("Connecting to WiFi...");
   }
   Serial.println("Connected to WiFi");
-  // printConnectedToWifi();
+  printConnectedToWifi();
 
+  webSocket.beginSSL(host, 443, "/api/v1/ws/" + String(walletId));
   webSocket.onEvent(webSocketEvent);
-  webSocket.beginSSL("legend.lnbits.com", 443, "/api/v1/ws/845ad088a1604d96ba039b7d6efe87ab");
   webSocket.setReconnectInterval(5000); // Try to reconnect every 5 seconds
   webSocket.enableHeartbeat(5000, 3000, 2); // Send heartbeat every 15 seconds
 }
@@ -254,11 +209,12 @@ long lastWebsocketPingTime = 0;
 
 void loop() {
   webSocket.loop();
+
   // ping websocket every 10 seconds
   if (millis() - lastWebsocketPingTime > 10000) {
     webSocket.sendPing();
     lastWebsocketPingTime = millis();
   }
   
-  // printReceipt();
+  printReceipt();
 }
