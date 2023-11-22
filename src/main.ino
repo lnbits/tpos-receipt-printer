@@ -1,8 +1,10 @@
 #include <WiFi.h>
+// #include "qrencode.h"
 #include <SPIFFS.h>
-#include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include "Adafruit_Thermal.h"
+#include <WebSocketsClient.h>
+
 
 #define TX_PIN 15 // Arduino transmit  YELLOW WIRE  labeled RX on printer
 #define RX_PIN 2 // Arduino receive   GREEN WIRE   labeled TX on printer
@@ -13,32 +15,75 @@ Adafruit_Thermal printer(&mySerial);     // Pass addr to printer constructor
 const char* ssid = "PLUSNET-MWC9Q2";
 const char* password = "4NyMeXtNcQ6rqP";
 
-const char* apiUrl = "https://legend.lnbits.com/api/v1/payments/paginated?limit=10&offset=0&sortby=time&direction=desc";
-const char* apiKey = "a5e68ac0d7f64711a863c5195f664687"; // Replace with your actual API key
+WebSocketsClient webSocket;
 
-long lastPrintedPaymentTime = 0;
+const char* webSocketServer = "wss://legend.lnbits.com/api/v1/ws/845ad088a1604d96ba039b7d6efe87ab";
+
 bool hasReceiptToPrint = false;
 
 JsonVariant lastPayment;
 
-
-void makeHttpRequest() {
-  HTTPClient http;
-  http.begin(apiUrl);
-  http.addHeader("X-API-Key", apiKey);
-
-  int httpResponseCode = http.GET();
-  
-  if (httpResponseCode > 0) {
-    String payload = http.getString();
-    deserializeAndCompare(payload);
-  } else {
-    Serial.print("Error on HTTP request: ");
-    Serial.println(httpResponseCode);
+void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
+  switch(type) {
+    case WStype_DISCONNECTED:
+      Serial.printf("[WebSocket] Disconnected!\n");
+     
+      break;
+    case WStype_CONNECTED:
+      Serial.printf("[WebSocket] Connected to url: %s\n", payload);
+      break;
+    case WStype_TEXT:
+      Serial.printf("[WebSocket] Received text: %s\n", payload);
+      deserializeAndCompare(String((char *)payload));
+      break;
   }
-
-  http.end();
 }
+
+// void printQR(String message) {
+
+//   // new line
+//   printer.print("\n");
+//   printer.print("\n");
+
+//   // zero line spacing
+//   printer.write(27);
+//   printer.write(51);
+//   printer.write((byte)0);
+  
+//   // center-align
+//   printer.write(27);
+//   printer.write(97);
+//   printer.write(49);
+  
+//   // create QR code
+//   message.toCharArray((char *)strinbuf,47);
+//   qrencode();
+  
+//   // print QR Code
+//   for (byte x = 0; x < WD; x+=2) {
+//     for (byte y = 0; y < WD; y++) {
+//       if ( QRBIT(x,y) &&  QRBIT((x+1),y)) { printer.write(219); }  // black square on top of black square
+//       if (!QRBIT(x,y) &&  QRBIT((x+1),y)) { printer.write(220); }  // white square on top of black square
+//       if ( QRBIT(x,y) && !QRBIT((x+1),y)) { printer.write(223); }  // black square on top of white square
+//       if (!QRBIT(x,y) && !QRBIT((x+1),y)) { printer.print(" "); }  // white square on top of white square
+//     }
+//     printer.write(10);  // next line
+//   }
+  
+//   // default line spacing
+//   printer.write(27);
+//   printer.write(50); 
+  
+//   // default-align (left)
+//   printer.write(27);
+//   printer.write(97);
+//   printer.write(48);
+
+//   // new line
+//   printer.print("\n");
+//   printer.print("\n");
+  
+// }
 
 void printConnectedToWifi() {
   String receipt = R"(
@@ -63,6 +108,7 @@ void printWelcomeReceipt() {
   
     printer.wake();
     printer.print(receipt);
+    // printQR("TEST");
     printer.sleep();
   }
 
@@ -70,47 +116,27 @@ void deserializeAndCompare(String json) {
   DynamicJsonDocument doc(4096);
   deserializeJson(doc, json);
 
-  // loop around the doc["data"] item
-  for (JsonVariant value : doc["data"].as<JsonArray>()) {
-    long time = value["time"].as<long>();
-    String paymentHash = value["payment_hash"].as<String>();
+  // Extract the 'payment' object from the received JSON
+  JsonObject payment = doc["payment"];
+
+  if (!payment.isNull()) {
+    long time = payment["time"].as<long>();
+    String paymentHash = payment["payment_hash"].as<String>();
     Serial.println("Payment time: " + String(time));
-    String tag = value["extra"]["tag"].as<String>();
+    String tag = payment["extra"]["tag"].as<String>();
     Serial.println("Tag: " + tag);
-    String memo = value["memo"].as<String>();
+    String memo = payment["memo"].as<String>();
     Serial.println("Memo: " + memo);
-    String pending = value["pending"].as<String>();
+    bool pending = payment["pending"].as<bool>();
 
-    if (
-      pending == "false"
-      &&
-      tag == "tpos"
-      &&
-      memo.indexOf("tip") == -1
-      && 
-      time > lastPrintedPaymentTime
-    ) {
-      lastPrintedPaymentTime = time;
+    if (!pending && tag == "tpos" && memo.indexOf("tip") == -1) {
       Serial.println("New payment received!");
-      lastPayment = value;
+      lastPayment = payment;
       hasReceiptToPrint = true;
-
-      // Save last payment hash to SPIFFS
-      File file = SPIFFS.open("/lastPaymentTime.txt", FILE_WRITE);
-      if (!file) {
-        Serial.println("Failed to open file for writing");
-        return;
-      }
-      if (file.print(lastPrintedPaymentTime)) {
-        Serial.println("File written");
-      } else {
-        Serial.println("Write failed");
-      }
-      file.close();
-      break;
     }
   }
 }
+
 
 /**
  * @brief Convert a timestamp to Month, 20th 2021 at 12:00pm
@@ -203,6 +229,7 @@ Fee:   $$fee sats
 
 void setup() {
   Serial.begin(115200);
+  Serial.println("Starting...");
 
   mySerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN); // Initialize serial
   printer.begin();        // Init printer (same regardless of serial type)
@@ -215,27 +242,23 @@ void setup() {
     Serial.println("Connecting to WiFi...");
   }
   Serial.println("Connected to WiFi");
-  printConnectedToWifi();
+  // printConnectedToWifi();
 
-
-  // Initialize SPIFFS
-  if (!SPIFFS.begin(true)) {
-    Serial.println("An Error has occurred while mounting SPIFFS");
-    return;
-  }
-
-  // Read last payment hash
-  File file = SPIFFS.open("/lastPaymentTime.txt", FILE_READ);
-  if (file) {
-    String lastPrintedPaymentTimeString = file.readString();
-    lastPrintedPaymentTime = lastPrintedPaymentTimeString.toInt();
-    Serial.println("Last payment time: " + lastPrintedPaymentTimeString);
-    file.close();
-  }
+  webSocket.onEvent(webSocketEvent);
+  webSocket.beginSSL("legend.lnbits.com", 443, "/api/v1/ws/845ad088a1604d96ba039b7d6efe87ab");
+  webSocket.setReconnectInterval(5000); // Try to reconnect every 5 seconds
+  webSocket.enableHeartbeat(5000, 3000, 2); // Send heartbeat every 15 seconds
 }
 
+long lastWebsocketPingTime = 0;
+
 void loop() {
-  makeHttpRequest();
-  printReceipt();
-  delay(10000);
+  webSocket.loop();
+  // ping websocket every 10 seconds
+  if (millis() - lastWebsocketPingTime > 10000) {
+    webSocket.sendPing();
+    lastWebsocketPingTime = millis();
+  }
+  
+  // printReceipt();
 }
