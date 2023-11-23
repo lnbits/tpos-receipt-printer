@@ -35,7 +35,6 @@ String currentBlockHeight = "";
  * @param length 
  */
 String getBlockHeight() {
-  Serial.println("Getting block height...");
   HTTPClient http;
   http.begin("https://mempool.space/api/blocks/tip/height");
   int httpCode = http.GET();
@@ -117,14 +116,16 @@ void deserializeAndCompare(String json) {
 }
 
 void websocketTask(void * parameter) {
+  Serial.println("websocketTask niit");
   for(;;) {
+    Serial.println("websocketTask");
     webSocket.loop();
 
     if (millis() - lastWebsocketPingTime > 10000) {
       webSocket.sendPing();
       lastWebsocketPingTime = millis();
     }
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(500 / portTICK_PERIOD_MS);
   }
 }
 
@@ -138,6 +139,7 @@ void printReceiptTask(void * parameter) {
 
 // BlockHeight freertos task
 void getBlockHeightTask(void * parameter) {
+  Serial.println("getBlockHeightTask");
   for(;;) {
     currentBlockHeight = getBlockHeight();
     vTaskDelay(60000 / portTICK_PERIOD_MS);
@@ -147,31 +149,33 @@ void getBlockHeightTask(void * parameter) {
 // freertos task setup
 void setupTasks() {
   Serial.println("setupTasks");
-  xTaskCreatePinnedToCore(
-    printReceiptTask,   /* Task function. */
-    "printReceiptTask", /* name of task. */
-    10000,              /* Stack size of task */
-    NULL,               /* parameter of the task */
-    1,                  /* priority of the task */
-    NULL,               /* Task handle to keep track of created task */
-    0);                 /* pin task to core 0 */ 
+  // printReceiptTask
+  // xTaskCreatePinnedToCore(
+  //   printReceiptTask,   /* Task function. */
+  //   "printReceiptTask", /* name of task. */
+  //   1000,               /* Stack size of task */
+  //   NULL,               /* parameter of the task */
+  //   0,                  /* priority of the task */
+  //   NULL,               /* Task handle to keep track of created task */
+  //   0);                 /* pin task to core 0 */
 
-  xTaskCreatePinnedToCore(
-    getBlockHeightTask,   /* Task function. */
-    "getBlockHeightTask", /* name of task. */
-    10000,                /* Stack size of task */
-    NULL,                 /* parameter of the task */
-    1,                    /* priority of the task */
-    NULL,                 /* Task handle to keep track of created task */
-    0);                   /* pin task to core 0 */ 
+  // xTaskCreatePinnedToCore(
+  //   getBlockHeightTask,   /* Task function. */
+  //   "getBlockHeightTask", /* name of task. */
+  //   1000,                /* Stack size of task */
+  //   NULL,                 /* parameter of the task */
+  //   0,                    /* priority of the task */
+  //   NULL,                 /* Task handle to keep track of created task */
+  //   1);                   /* pin task to core 0 */ 
+
   xTaskCreatePinnedToCore(
     websocketTask,   /* Task function. */
     "websocketTask", /* name of task. */
-    10000,           /* Stack size of task */
+    2000,           /* Stack size of task */
     NULL,            /* parameter of the task */
-    1,               /* priority of the task */
+    0,               /* priority of the task */
     NULL,            /* Task handle to keep track of created task */
-    1);              /* pin task to core 0 */
+    0);              /* pin task to core 0 */
 }
 
 void setup() {
@@ -206,6 +210,9 @@ void setup() {
   webSocket.setReconnectInterval(5000); // Try to reconnect every 5 seconds
   webSocket.enableHeartbeat(5000, 3000, 2); // Send heartbeat every 15 seconds
   
+  // create the queue
+  paymentQueue = xQueueCreate(10, sizeof(Payment));
+
   setupTasks();
 }
 

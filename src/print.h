@@ -91,56 +91,56 @@ void printReceipt() {
     // Wait for a payment to be available in the queue
     if (xQueueReceive(paymentQueue, &payment, portMAX_DELAY)) {
 
-        String receipt = R"(
+        // String receipt = R"(
 
-        $$companyName
-        Sales Receipt
-        ------------------------
+        // $$companyName
+        // Sales Receipt
+        // ------------------------
 
-        $$time
-        Block Height: $$blockHeight
+        // $$time
+        // Block Height: $$blockHeight
 
-        Amount: $$amount sats
-        Tip:    $$tip sats
+        // Amount: $$amount sats
+        // Tip:    $$tip sats
 
-        Total:  $$total sats
-        Total:  $$fiatTotal
+        // Total:  $$total sats
+        // Total:  $$fiatTotal
 
-        Payment Hash:
-        $$paymentHash
-        ------------------------
-            Thank you!
-        ------------------------
-        )";
+        // Payment Hash:
+        // $$paymentHash
+        // ------------------------
+        //     Thank you!
+        // ------------------------
+        // )";
 
-        // Convert Unix timestamp to DateTime format
-        String time = unixTimeStampToDateTime(payment.time);
+        // // Convert Unix timestamp to DateTime format
+        // String time = unixTimeStampToDateTime(payment.time);
 
-        // Extract fiat total from memo (assuming it's stored at the beginning of the memo)
-        String fiatTotal = payment.memo.substring(0, payment.memo.indexOf(" "));
+        // // Extract fiat total from memo (assuming it's stored at the beginning of the memo)
+        // String fiatTotal = payment.memo.substring(0, payment.memo.indexOf(" "));
 
-        // Prepare data for replacement
-        receipt.replace("$$companyName", companyName);
-        receipt.replace("$$time", time);
-        receipt.replace("$$memo", payment.memo);
-        receipt.replace("$$amount", formatNumber(payment.amount / 1000 - payment.tipAmount));
-        receipt.replace("$$tip", formatNumber(payment.tipAmount));
-        receipt.replace("$$total", formatNumber(payment.amount / 1000));
-        receipt.replace("$$fiatTotal", fiatTotal);
-        receipt.replace("$$paymentHash", payment.paymentHash);
-        receipt.replace("$$blockHeight", currentBlockHeight);
+        // // Prepare data for replacement
+        // receipt.replace("$$companyName", companyName);
+        // receipt.replace("$$time", time);
+        // receipt.replace("$$memo", payment.memo);
+        // receipt.replace("$$amount", formatNumber(payment.amount / 1000 - payment.tipAmount));
+        // receipt.replace("$$tip", formatNumber(payment.tipAmount));
+        // receipt.replace("$$total", formatNumber(payment.amount / 1000));
+        // receipt.replace("$$fiatTotal", fiatTotal);
+        // receipt.replace("$$paymentHash", payment.paymentHash);
+        // receipt.replace("$$blockHeight", currentBlockHeight);
 
-        if(includeQuotes) {
-            String quote = getRandomQuote();
-            receipt += "\n" + quote;
-        }
-        receipt += "\n\n";
+        // if(includeQuotes) {
+        //     String quote = getRandomQuote();
+        //     receipt += "\n" + quote;
+        // }
+        // receipt += "\n\n";
 
-        Serial.print(receipt);
+        // Serial.print(receipt);
 
-        printer.wake();
-        printer.print(receipt);
-        printer.sleep();
+        // printer.wake();
+        // printer.print(receipt);
+        // printer.sleep();
     }
 }
 
