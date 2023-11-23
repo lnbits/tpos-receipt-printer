@@ -1,10 +1,11 @@
 #ifndef config_h
 #define config_h
 
-const char* companyName = "LNbits";
-const char* ssid = "[wifi ssid]";
-const char* password = "[wifi password]";
-const char* host = "legend.lnbits.com";
-const char* walletId = "[lnbits wallet id]";
+const bool includeQuotes = true; // Add Satoshi quotes to the receipt
+const char* companyName = "LNbits"; // Your company name, this is shown on the receipt
+const char* ssid = "[wifi ssid]"; // Your wifi SSID
+const char* password = "[wifi password]"; // Your wifi password
+const char* host = "legend.lnbits.com"; // Your LNbits host
+const char* walletId = "[lnbits wallet id]"; // Your LNbits wallet id
 
 #endif
