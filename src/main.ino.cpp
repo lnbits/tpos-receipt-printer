@@ -1,4 +1,4 @@
-# 1 "/var/folders/96/v_l40xh56t74ymwrdnrq84d80000gn/T/tmptch3kl8y"
+# 1 "/var/folders/96/v_l40xh56t74ymwrdnrq84d80000gn/T/tmpnatg6l4t"
 #include <Arduino.h>
 # 1 "/Users/mark/projects/lnbits/LNbits-TPoS-Printer/src/main.ino"
 #include "config.h"
@@ -100,7 +100,7 @@ void setup() {
   printer.begin();
   printWelcomeReceipt();
 
-  printTestReceipt();
+
 
 
   WiFi.begin(ssid, password);
