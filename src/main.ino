@@ -22,7 +22,7 @@ bool hasReceiptToPrint = false;
 
 JsonVariant lastPayment;
 
-String currentBlockHeight = "818114";
+String currentBlockHeight = "818,114";
 
 /**
  * @brief Get the current block height from https://mempool.space/api/blocks/tip/height formatted nicely with commas
