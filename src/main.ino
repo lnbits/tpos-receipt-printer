@@ -9,6 +9,8 @@
 #include <WebSocketsClient.h>
 #include <HTTPClient.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #define TX_PIN 15 // Arduino transmit  YELLOW WIRE  labeled RX on printer
 #define RX_PIN 2 // Arduino receive   GREEN WIRE   labeled TX on printer
@@ -18,9 +20,9 @@ Adafruit_Thermal printer(&mySerial);     // Pass addr to printer constructor
 
 WebSocketsClient webSocket;
 
-bool hasReceiptToPrint = false;
+long lastWebsocketPingTime = 0;
 
-JsonVariant lastPayment;
+QueueHandle_t paymentQueue;
 
 String currentBlockHeight = "";
 
@@ -33,6 +35,7 @@ String currentBlockHeight = "";
  * @param length 
  */
 String getBlockHeight() {
+  Serial.println("Getting block height...");
   HTTPClient http;
   http.begin("https://mempool.space/api/blocks/tip/height");
   int httpCode = http.GET();
@@ -71,24 +74,104 @@ void deserializeAndCompare(String json) {
   deserializeJson(doc, json);
 
   // Extract the 'payment' object from the received JSON
-  JsonObject payment = doc["payment"];
+  JsonObject paymentObj = doc["payment"];
 
-  if (!payment.isNull()) {
-    long time = payment["time"].as<long>();
-    String paymentHash = payment["payment_hash"].as<String>();
-    Serial.println("Payment time: " + String(time));
-    String tag = payment["extra"]["tag"].as<String>();
-    Serial.println("Tag: " + tag);
-    String memo = payment["memo"].as<String>();
-    Serial.println("Memo: " + memo);
-    bool pending = payment["pending"].as<bool>();
+  if (!paymentObj.isNull()) {
+
+    long time = paymentObj["time"].as<long>();
+    String memo = paymentObj["memo"].as<String>();
+    int amountMSats = paymentObj["amount"].as<int>();
+    String tag = paymentObj["extra"]["tag"].as<String>();
+    int tipAmount = paymentObj["extra"]["tipAmount"].as<int>();
+    String paymentHash = paymentObj["payment_hash"].as<String>();
+    int fee = paymentObj["fee"].as<int>();
+    bool pending = paymentObj["pending"].as<bool>();
+
+    // serial print all the things
+    Serial.println("time: " + String(time));
+    Serial.println("memo: " + memo);
+    Serial.println("amountMSats: " + String(amountMSats));
+    Serial.println("tag: " + tag);
+    Serial.println("tipAmount: " + String(tipAmount));
+    Serial.println("paymentHash: " + paymentHash);
+    Serial.println("fee: " + String(fee));
+    Serial.println("pending: " + String(pending));
+    
 
     if (!pending && tag == "tpos" && memo.indexOf("tip") == -1) {
       Serial.println("New payment received!");
-      lastPayment = payment;
-      hasReceiptToPrint = true;
+
+      Payment newPayment;
+      newPayment.time = time;
+      newPayment.memo = memo;
+      newPayment.amount = amountMSats;
+      newPayment.tipAmount = tipAmount;
+      newPayment.tag = tag;
+      newPayment.paymentHash = paymentHash;      
+
+      if (!xQueueSend(paymentQueue, &newPayment, portMAX_DELAY)) {
+        Serial.println("Failed to send payment to the queue");
+      }
     }
   }
+}
+
+void websocketTask(void * parameter) {
+  for(;;) {
+    webSocket.loop();
+
+    if (millis() - lastWebsocketPingTime > 10000) {
+      webSocket.sendPing();
+      lastWebsocketPingTime = millis();
+    }
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+  }
+}
+
+// printReceipt freertos task
+void printReceiptTask(void * parameter) {
+  for(;;) {
+    printReceipt();
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+  }
+}
+
+// BlockHeight freertos task
+void getBlockHeightTask(void * parameter) {
+  for(;;) {
+    currentBlockHeight = getBlockHeight();
+    vTaskDelay(60000 / portTICK_PERIOD_MS);
+  }
+}
+
+// freertos task setup
+void setupTasks() {
+  Serial.println("setupTasks");
+  xTaskCreatePinnedToCore(
+    printReceiptTask,   /* Task function. */
+    "printReceiptTask", /* name of task. */
+    10000,              /* Stack size of task */
+    NULL,               /* parameter of the task */
+    1,                  /* priority of the task */
+    NULL,               /* Task handle to keep track of created task */
+    0);                 /* pin task to core 0 */ 
+
+  xTaskCreatePinnedToCore(
+    getBlockHeightTask,   /* Task function. */
+    "getBlockHeightTask", /* name of task. */
+    10000,                /* Stack size of task */
+    NULL,                 /* parameter of the task */
+    1,                    /* priority of the task */
+    NULL,                 /* Task handle to keep track of created task */
+    0);                   /* pin task to core 0 */ 
+  xTaskCreatePinnedToCore(
+    websocketTask,   /* Task function. */
+    "websocketTask", /* name of task. */
+    10000,           /* Stack size of task */
+    NULL,            /* parameter of the task */
+    1,               /* priority of the task */
+    NULL,            /* Task handle to keep track of created task */
+    1);              /* pin task to core 0 */
 }
 
 void setup() {
@@ -113,7 +196,6 @@ void setup() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("Connected to WiFi");
     printConnectedToWifi();
-    return;
   } else {
     Serial.println("Failed to connect to WiFi");
     printFailedToConnectToWifi();
@@ -123,26 +205,10 @@ void setup() {
   webSocket.onEvent(webSocketEvent);
   webSocket.setReconnectInterval(5000); // Try to reconnect every 5 seconds
   webSocket.enableHeartbeat(5000, 3000, 2); // Send heartbeat every 15 seconds
+  
+  setupTasks();
 }
 
-long lastWebsocketPingTime = 0;
-
-long lastBlockHeightRetrieved = 0;
-
 void loop() {
-  webSocket.loop();
-
-  // get block height every 1 minute
-  if (millis() - lastBlockHeightRetrieved > 60000) {
-    currentBlockHeight = getBlockHeight();
-    lastBlockHeightRetrieved = millis();
-  }
-
-  // ping websocket every 10 seconds
-  if (millis() - lastWebsocketPingTime > 10000) {
-    webSocket.sendPing();
-    lastWebsocketPingTime = millis();
-  }
   
-  printReceipt();
 }

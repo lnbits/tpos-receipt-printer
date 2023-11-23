@@ -8,10 +8,19 @@
 #include <ArduinoJson.h>
 
 extern Adafruit_Thermal printer;
-extern bool hasReceiptToPrint;
-extern JsonVariant lastPayment;
 extern String currentBlockHeight;
 extern const bool includeQuotes;
+extern QueueHandle_t paymentQueue;
+
+struct Payment {
+  long time;
+  String memo;
+  int amount;
+  String tag;
+  int tipAmount;
+  String paymentHash;
+  int fee;
+};
 
 const char* wl_status_to_string(wl_status_t status) {
   switch (status) {
@@ -75,88 +84,79 @@ void printWelcomeReceipt() {
  * @brief Print the receipt
  * 
  */
+extern QueueHandle_t paymentQueue;  // Ensure this is declared globally
+
 void printReceipt() {
-  // if lastPayment is not empty
+    Payment payment;
+    // Wait for a payment to be available in the queue
+    if (xQueueReceive(paymentQueue, &payment, portMAX_DELAY)) {
 
-   String receipt = R"(
+        String receipt = R"(
 
-  $$companyName
-  Sales Receipt
-------------------------
+        $$companyName
+        Sales Receipt
+        ------------------------
 
-$$time
-Block Height: $$blockHeight
+        $$time
+        Block Height: $$blockHeight
 
-Amount: $$amount sats
-Tip:    $$tip sats
+        Amount: $$amount sats
+        Tip:    $$tip sats
 
-Total:  $$total sats
-Total:  $$fiatTotal
+        Total:  $$total sats
+        Total:  $$fiatTotal
 
-Payment Hash:
-$$paymentHash
-------------------------
-    Thank you!
-------------------------
-  )";
+        Payment Hash:
+        $$paymentHash
+        ------------------------
+            Thank you!
+        ------------------------
+        )";
 
-  if (hasReceiptToPrint) {
+        // Convert Unix timestamp to DateTime format
+        String time = unixTimeStampToDateTime(payment.time);
 
-    String time = lastPayment["time"].as<String>();
-    time = unixTimeStampToDateTime(time.toInt());
+        // Extract fiat total from memo (assuming it's stored at the beginning of the memo)
+        String fiatTotal = payment.memo.substring(0, payment.memo.indexOf(" "));
 
-    String memo = lastPayment["memo"].as<String>();
-    String fiatTotal = memo.substring(0, memo.indexOf(" "));
-    int amountMSats = lastPayment["amount"].as<int>();
-    String tag = lastPayment["extra"]["tag"].as<String>();
-    int tipAmount = lastPayment["extra"]["tipAmount"].as<int>();
-    String paymentHash = lastPayment["payment_hash"].as<String>();
-    int fee = lastPayment["fee"].as<int>();
+        // Prepare data for replacement
+        receipt.replace("$$companyName", companyName);
+        receipt.replace("$$time", time);
+        receipt.replace("$$memo", payment.memo);
+        receipt.replace("$$amount", formatNumber(payment.amount / 1000 - payment.tipAmount));
+        receipt.replace("$$tip", formatNumber(payment.tipAmount));
+        receipt.replace("$$total", formatNumber(payment.amount / 1000));
+        receipt.replace("$$fiatTotal", fiatTotal);
+        receipt.replace("$$paymentHash", payment.paymentHash);
+        receipt.replace("$$blockHeight", currentBlockHeight);
 
-    // search and replace in receipt
-    receipt.replace("$$companyName", companyName);
-    receipt.replace("$$time", time);
-    receipt.replace("$$memo", memo);
-    receipt.replace("$$amount", formatNumber(amountMSats / 1000 - tipAmount));
-    receipt.replace("$$tip", formatNumber(tipAmount));
-    receipt.replace("$$total", formatNumber(amountMSats / 1000));
-    receipt.replace("$$fiatTotal", fiatTotal);
-    receipt.replace("$$fee", String(fee));
-    receipt.replace("$$paymentHash", paymentHash);
-    receipt.replace("$$blockHeight", currentBlockHeight);
+        if(includeQuotes) {
+            String quote = getRandomQuote();
+            receipt += "\n" + quote;
+        }
+        receipt += "\n\n";
 
-    if(includeQuotes) {
-        String quote = getRandomQuote();
-        receipt += "\n" + quote;
+        Serial.print(receipt);
+
+        printer.wake();
+        printer.print(receipt);
+        printer.sleep();
     }
-    receipt += "\n\n";
-
-    Serial.print(receipt);
-
-    printer.wake();
-    printer.print(receipt);
-    printer.sleep();
-  }
-  hasReceiptToPrint = false;
 }
 
 void printTestReceipt() {
-  // create a JsonVariant test of lastPayment for testing, it needs:
-  // time, memo, amount, extra.tag, extra.tipAmount, payment_hash, fee
-    DynamicJsonDocument doc(4096);
-    doc["time"] = 1626796800;
-    doc["memo"] = "$21.00 to Test TPoS";
-    doc["amount"] = 21000000;
-    doc["extra"]["tag"] = "tpos";
-    doc["extra"]["tipAmount"] = 210;
-    // example lightning payment hash
-    doc["payment_hash"] = "0001020304050607080900010203040506070809000102030405060708090102";
-    doc["fee"] = 0;
-    lastPayment = doc.as<JsonVariant>();
-    hasReceiptToPrint = true;
-    printReceipt();
-    // clear lastPayment
-    lastPayment = JsonVariant();
+  // push a payment to the queue
+  Payment payment;
+  payment.time = 1620000000;
+  payment.memo = "$21.00 to TPoS demo";
+  payment.amount = 21000000;
+  payment.tipAmount = 210;
+  payment.tag = "tpos";
+  payment.paymentHash = "0001020304050607080900010203040506070809000102030405060708090102";
+  payment.fee = 0;
+  if (!xQueueSend(paymentQueue, &payment, portMAX_DELAY)) {
+    Serial.println("Failed to send payment to the queue");
+  }
 }
 
 #endif
