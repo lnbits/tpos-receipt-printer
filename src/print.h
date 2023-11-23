@@ -127,14 +127,17 @@ $$paymentHash
 
     if(includeQuotes) {
         String quote = getRandomQuote();
-        receipt += "\n" + quote;
+        receipt += "\r\n" + quote;
     }
-    receipt += "\n\n";
 
     Serial.print(receipt);
 
     printer.wake();
     printer.print(receipt);
+    // two blank lines
+    printer.println();
+    printer.println();
+    
     printer.sleep();
   }
   hasReceiptToPrint = false;

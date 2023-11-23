@@ -22,7 +22,7 @@ bool hasReceiptToPrint = false;
 
 JsonVariant lastPayment;
 
-String currentBlockHeight = "";
+String currentBlockHeight = "818114";
 
 /**
  * @brief Get the current block height from https://mempool.space/api/blocks/tip/height formatted nicely with commas
@@ -98,8 +98,6 @@ void setup() {
   mySerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN); // Initialize serial
   printer.begin();        // Init printer (same regardless of serial type)
   printWelcomeReceipt();
-
-  // printTestReceipt();
   
   // Connect to WiFi
   WiFi.begin(ssid, password);
@@ -113,11 +111,12 @@ void setup() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("Connected to WiFi");
     printConnectedToWifi();
-    return;
   } else {
     Serial.println("Failed to connect to WiFi");
     printFailedToConnectToWifi();
   }
+
+  printTestReceipt();
 
   webSocket.beginSSL(host, 443, "/api/v1/ws/" + String(walletId));
   webSocket.onEvent(webSocketEvent);

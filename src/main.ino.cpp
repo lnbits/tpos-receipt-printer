@@ -1,4 +1,4 @@
-# 1 "/var/folders/96/v_l40xh56t74ymwrdnrq84d80000gn/T/tmpnatg6l4t"
+# 1 "/var/folders/96/v_l40xh56t74ymwrdnrq84d80000gn/T/tmpcrsxlm6l"
 #include <Arduino.h>
 # 1 "/Users/mark/projects/lnbits/LNbits-TPoS-Printer/src/main.ino"
 #include "config.h"
@@ -25,7 +25,7 @@ bool hasReceiptToPrint = false;
 
 JsonVariant lastPayment;
 
-String currentBlockHeight = "";
+String currentBlockHeight = "818114";
 # 35 "/Users/mark/projects/lnbits/LNbits-TPoS-Printer/src/main.ino"
 String getBlockHeight();
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length);
@@ -101,8 +101,6 @@ void setup() {
   printWelcomeReceipt();
 
 
-
-
   WiFi.begin(ssid, password);
 
   int i = 0;
@@ -114,11 +112,12 @@ void setup() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("Connected to WiFi");
     printConnectedToWifi();
-    return;
   } else {
     Serial.println("Failed to connect to WiFi");
     printFailedToConnectToWifi();
   }
+
+  printTestReceipt();
 
   webSocket.beginSSL(host, 443, "/api/v1/ws/" + String(walletId));
   webSocket.onEvent(webSocketEvent);
