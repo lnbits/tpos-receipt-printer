@@ -1,9 +1,13 @@
 #include "config.h"
+#include "formatting.h"
+#include "print.h"
+
 #include <WiFi.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include "Adafruit_Thermal.h"
 #include <WebSocketsClient.h>
+#include <HTTPClient.h>
 
 
 #define TX_PIN 15 // Arduino transmit  YELLOW WIRE  labeled RX on printer
@@ -17,6 +21,35 @@ WebSocketsClient webSocket;
 bool hasReceiptToPrint = false;
 
 JsonVariant lastPayment;
+
+String currentBlockHeight = "";
+
+/**
+ * @brief Get the current block height from https://mempool.space/api/blocks/tip/height formatted nicely with commas
+ * This URL returns one line of text e.g. "832123"
+ * 
+ * @param type 
+ * @param payload 
+ * @param length 
+ */
+String getBlockHeight() {
+  HTTPClient http;
+  http.begin("https://mempool.space/api/blocks/tip/height");
+  int httpCode = http.GET();
+  String payload = http.getString();
+  http.end();
+
+  if (httpCode == 200) {
+    Serial.println("Block height: " + payload);
+    // format with commas
+    int blockHeight = payload.toInt();
+    
+    return formatNumber(blockHeight);
+  } else {
+    Serial.println("Error getting block height");
+    return "";
+  }
+}
 
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   switch(type) {
@@ -32,38 +65,6 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       break;
   }
 }
-
-void printConnectedToWifi() {
-  String receipt = R"(
-
- Connected to WiFi
- $$ssid
-************************
-
-
-    )";
-    receipt.replace("$$ssid", ssid);
-    printer.wake();
-    printer.print(receipt);
-    printer.sleep();
-}
-
-void printWelcomeReceipt() {
-  String receipt = R"(
-************************
- LNbits
- TPoS Receipt Printer
- $$companyName
-)";
-
-    receipt.replace("$$companyName", companyName);
-  
-    printer.wake();
-    printer.print(receipt);
-
-   
-    printer.sleep();
-  }
 
 void deserializeAndCompare(String json) {
   DynamicJsonDocument doc(4096);
@@ -90,98 +91,6 @@ void deserializeAndCompare(String json) {
   }
 }
 
-
-/**
- * @brief Convert a timestamp to Month, 20th 2021 at 12:00pm
- * 
- * @param timestamp 
- * @return String 
- */
-String unixTimeStampToDateTime(long timestamp) {
-  // Convert timestamp to Date
-  struct tm * timeinfo;
-  timeinfo = localtime(&timestamp);
-  char date[20];
-  strftime(date, 20, "%b %d, %Y", timeinfo);
-
-  // Convert timestamp to Time
-  char time[20];
-  strftime(time, 20, "%H:%M", timeinfo);
-
-  String dateTime = String(date) + " at " + String(time);
-  return dateTime;
-}
-
-// print receipt
-void printReceipt() {
-  // if lastPayment is not empty
-
-   String receipt = R"(
-
-************************
-  $$companyName
-  PAYMENT RECEIVED
-************************
-
-$$time
-
-$$memo
-
-Amount: $$amount sats
-Tip:    $$tip sats
-----
-Total:  $$total sats
-
-************************
-    Thank you!
-************************
-
-
-  )";
-
-  if (hasReceiptToPrint) {
-    Serial.println("Printing receipt...");
-
-    String time = lastPayment["time"].as<String>();
-    time = unixTimeStampToDateTime(time.toInt());
-
-    String memo = lastPayment["memo"].as<String>();
-    int amountMSats = lastPayment["amount"].as<int>();
-    String tag = lastPayment["extra"]["tag"].as<String>();
-    int tipAmount = lastPayment["extra"]["tipAmount"].as<int>();
-    String paymentHash = lastPayment["payment_hash"].as<String>();
-    int fee = lastPayment["fee"].as<int>();
-
-    // print all the above to serial
-    Serial.println("Time: " + time);
-    Serial.println("Memo: " + memo);
-    Serial.println("Amount: " + String(amountMSats));
-    Serial.println("Tag: " + tag);
-    Serial.println("Tip amount: " + String(tipAmount));
-    Serial.println("Payment hash: " + paymentHash);
-    Serial.println("Fee: " + String(fee));
-
-    // search and replace in receipt
-    receipt.replace("$$companyName", companyName);
-    receipt.replace("$$time", time);
-    receipt.replace("$$memo", memo);
-    receipt.replace("$$amount", String(amountMSats / 1000 - tipAmount));
-    receipt.replace("$$tip", String(tipAmount));
-    receipt.replace("$$total", String(amountMSats / 1000));
-    receipt.replace("$$fee", String(fee));
-
-
-    // printer.doubleHeightOn();
-    printer.wake();
-    printer.print(receipt);
-    printer.sleep();
-
-    // printer.doubleHeightOff();
-  }
-  hasReceiptToPrint = false;
-}
-
-
 void setup() {
   Serial.begin(115200);
   Serial.println("Starting...");
@@ -189,15 +98,26 @@ void setup() {
   mySerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN); // Initialize serial
   printer.begin();        // Init printer (same regardless of serial type)
   printWelcomeReceipt();
+
+  // printTestReceipt();
   
   // Connect to WiFi
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
+  // try to connect to WiFi for 10 seconds
+  int i = 0;
+  while (WiFi.status() != WL_CONNECTED && i < 10) {
     delay(1000);
-    Serial.println("Connecting to WiFi...");
+    Serial.print(".");
+    i++;
   }
-  Serial.println("Connected to WiFi");
-  printConnectedToWifi();
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("Connected to WiFi");
+    printConnectedToWifi();
+    return;
+  } else {
+    Serial.println("Failed to connect to WiFi");
+    printFailedToConnectToWifi();
+  }
 
   webSocket.beginSSL(host, 443, "/api/v1/ws/" + String(walletId));
   webSocket.onEvent(webSocketEvent);
@@ -207,8 +127,16 @@ void setup() {
 
 long lastWebsocketPingTime = 0;
 
+long lastBlockHeightRetrieved = 0;
+
 void loop() {
   webSocket.loop();
+
+  // get block height every 1 minute
+  if (millis() - lastBlockHeightRetrieved > 60000) {
+    currentBlockHeight = getBlockHeight();
+    lastBlockHeightRetrieved = millis();
+  }
 
   // ping websocket every 10 seconds
   if (millis() - lastWebsocketPingTime > 10000) {
