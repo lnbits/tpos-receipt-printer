@@ -99,7 +99,7 @@ void setup() {
   printer.begin();        // Init printer (same regardless of serial type)
   printWelcomeReceipt();
 
-  // printTestReceipt();
+  printTestReceipt();
   
   // Connect to WiFi
   WiFi.begin(ssid, password);
