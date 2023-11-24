@@ -112,13 +112,13 @@ String getPaymentItems(String paymentExtraDetails)
     return "";
   }
   String itemsString = "";
-  // loop through items and add to itemsString using title, quantity and formattedPrice
+  // loop through items and add to itemsString using title, quantity and price
   for (JsonVariant item : items)
   {
     String title = item["title"].as<String>();
     int quantity = item["quantity"].as<int>();
-    String formattedPrice = item["formattedPrice"].as<String>();
-    itemsString += title + " x " + String(quantity) + "   " + formattedPrice + "\n";
+    float price = item["price"].as<float>();
+    itemsString += title + " x " + String(quantity) + "   " + String(price) + "\n";
   }
   Serial.println("Items: " + itemsString);
   return itemsString;
@@ -219,9 +219,9 @@ Thank you!
     receipt.replace("$$memo", memo);
     receipt.replace("$$items", itemsDetail);
     receipt.replace("$$amount", formatNumber(amountMSats / 1000 - tipAmount));
-    receipt.replace("$$subTotalFiat", " / " + subTotalFiat);
-    receipt.replace("$$tip ", formatNumber(tipAmount));
-    receipt.replace("$$tipsFiat", " / " + tipsFiat);
+    receipt.replace("$$subTotalFiat", "- " + subTotalFiat);
+    receipt.replace("$$tip ", formatNumber(tipAmount) + " ");
+    receipt.replace("$$tipsFiat", "- " + tipsFiat);
     receipt.replace("$$total", formatNumber(amountMSats / 1000));
     receipt.replace("$$walletFiatAmount", fiatTotal);
     receipt.replace("$$walletFiatCurrency", walletFiatCurrency);
