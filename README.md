@@ -2,6 +2,8 @@
 
 This project features an ESP32 controlled thermal printer solution to print payment receipts as payments are made to the LNbits TPoS extension.
 
+The project is fully inspired by the [Coinos printer](coinos/coinos-printer) project.
+
 ## Setup
 
 Connect the printer to the ESP32 as follows.
