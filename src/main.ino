@@ -10,7 +10,7 @@
 #include <HTTPClient.h>
 
 
-#define TX_PIN 15 // Arduino transmit  YELLOW WIRE  labeled RX on printer
+#define TX_PIN 21 // Arduino transmit  YELLOW WIRE  labeled RX on printer
 #define RX_PIN 2 // Arduino receive   GREEN WIRE   labeled TX on printer
 
 HardwareSerial mySerial(1); // Declare HardwareSerial obj first
