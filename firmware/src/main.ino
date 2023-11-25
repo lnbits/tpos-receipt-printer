@@ -66,6 +66,35 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   }
 }
 
+void connectToWifi() {
+  // try to connect to WiFi for 10 seconds
+  int i = 0;
+  while (WiFi.status() != WL_CONNECTED && i < 10) {
+    delay(1000);
+    Serial.print(".");
+    i++;
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("Connected to WiFi");
+    printConnectedToWifi();
+    setupWebsocketConnection();
+  } else {
+    Serial.println("Failed to connect to WiFi");
+    printFailedToConnectToWifi();
+  }
+}
+
+void setupWebsocketConnection() {
+  // clear websocket connection and reconnect if connected
+  if (webSocket.isConnected()) {
+    webSocket.disconnect();
+  }
+  webSocket.beginSSL(host, 443, "/api/v1/ws/" + String(walletId));
+  webSocket.onEvent(webSocketEvent);
+  webSocket.setReconnectInterval(5000); // Try to reconnect every 5 seconds
+  webSocket.enableHeartbeat(5000, 3000, 2); // Send heartbeat every 15 seconds
+}
+
 void deserializeAndCompare(String json) {
   DynamicJsonDocument doc(4096);
   deserializeJson(doc, json);
@@ -103,30 +132,15 @@ void setup() {
   
   // Connect to WiFi
   WiFi.begin(ssid, password);
-  // try to connect to WiFi for 10 seconds
-  int i = 0;
-  while (WiFi.status() != WL_CONNECTED && i < 10) {
-    delay(1000);
-    Serial.print(".");
-    i++;
-  }
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("Connected to WiFi");
-    printConnectedToWifi();
-  } else {
-    Serial.println("Failed to connect to WiFi");
-    printFailedToConnectToWifi();
-  }
-
-  webSocket.beginSSL(host, 443, "/api/v1/ws/" + String(walletId));
-  webSocket.onEvent(webSocketEvent);
-  webSocket.setReconnectInterval(5000); // Try to reconnect every 5 seconds
-  webSocket.enableHeartbeat(5000, 3000, 2); // Send heartbeat every 15 seconds
+  
+  connectToWifi();
 }
 
 long lastWebsocketPingTime = 0;
 
 long lastBlockHeightRetrieved = 0;
+
+long lastWifiCheckTime = 0;
 
 void loop() {
   webSocket.loop();
@@ -144,4 +158,12 @@ void loop() {
   }
   
   printReceipt();
+
+  // check wifi every 10 seconds and reconnect if needed
+  if (millis() - lastWifiCheckTime > 10000) {
+    if (WiFi.status() != WL_CONNECTED) {
+      connectToWifi();
+    }
+    lastWifiCheckTime = millis();
+  }
 }
