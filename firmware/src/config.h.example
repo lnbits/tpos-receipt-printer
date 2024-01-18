@@ -8,4 +8,6 @@ const char* password = "[wifi password]"; // Your wifi password
 const char* host = "legend.lnbits.com"; // Your LNbits host
 const char* walletId = "[lnbits wallet id]"; // Your LNbits wallet id
 
+const bool printToSerialOnly = false; // Set to true to only print to serial monitor for debugging
+
 #endif
