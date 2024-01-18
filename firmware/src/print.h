@@ -12,6 +12,7 @@ extern bool hasReceiptToPrint;
 extern JsonVariant lastPayment;
 extern String currentBlockHeight;
 extern const bool includeQuotes;
+extern const bool printToSerialOnly;
 
 const char *wl_status_to_string(wl_status_t status)
 {
@@ -51,9 +52,12 @@ void printFailedToConnectToWifi()
 
   Serial.print(receipt);
 
-  printer.wake();
-  printer.print(receipt);
-  printer.sleep();
+  if (!printToSerialOnly)
+  {
+    printer.wake();
+    printer.print(receipt);
+    printer.sleep();
+  }
 }
 
 void printConnectedToWifi()
@@ -63,11 +67,15 @@ void printConnectedToWifi()
 
 
     )";
-  Serial.print(receipt);
   receipt.replace("$$ssid", ssid);
-  printer.wake();
-  printer.print(receipt);
-  printer.sleep();
+  Serial.print(receipt);
+
+  if (!printToSerialOnly)
+  {
+    printer.wake();
+    printer.print(receipt);
+    printer.sleep();
+  }
 }
 
 void printWelcomeReceipt()
@@ -79,9 +87,77 @@ void printWelcomeReceipt()
 
   receipt.replace("$$companyName", companyName);
   Serial.print(receipt);
-  printer.wake();
-  printer.print(receipt);
-  printer.sleep();
+  if (!printToSerialOnly)
+  {
+    printer.wake();
+    printer.print(receipt);
+    printer.sleep();
+  }
+}
+
+/**
+ * @brief Get the Exchange Rate from the exchangeRate property in the extra.details JSON string
+ *
+ * @param paymentExtraDetails
+ * @return float
+ */
+float getExchangeRate(String paymentExtraDetails)
+{
+  Serial.println("Getting exchange rate payment extra details: " + paymentExtraDetails);
+  DynamicJsonDocument doc(4096);
+  DeserializationError error = deserializeJson(doc, paymentExtraDetails);
+  if (error)
+  {
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.c_str());
+    return 0;
+  }
+  float exchangeRate = 0;
+  try
+  {
+    exchangeRate = doc["exchangeRate"].as<float>();
+    // this is sats per currency unit, convert to currency per bitcoin (100,000,000 sats)
+    float fiatExchangeRatePerBtc = 100000000 / exchangeRate;
+    Serial.println("fiatExchangeRatePerBtc: " + String(fiatExchangeRatePerBtc));
+    return fiatExchangeRatePerBtc;
+  }
+  catch (const std::exception &e)
+  {
+    Serial.println("Error getting exchangeRate from extra.details");
+    Serial.println(e.what());
+    return 0;
+  }
+}
+
+/**
+ * @brief Get the Currency object from the currency property in the extra.details JSON string
+ *
+ * @param paymentExtraDetails
+ * @return String
+ */
+String getCurrency(String paymentExtraDetails)
+{
+  Serial.println("getting currency Payment extra details: " + paymentExtraDetails);
+  DynamicJsonDocument doc(4096);
+  DeserializationError error = deserializeJson(doc, paymentExtraDetails);
+  if (error)
+  {
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.c_str());
+    return "";
+  }
+  String currency = "";
+  try
+  {
+    currency = doc["currency"].as<String>();
+  }
+  catch (const std::exception &e)
+  {
+    Serial.println("Error getting currency from extra.details");
+    Serial.println(e.what());
+    return "";
+  }
+  return currency;
 }
 
 /**
@@ -91,7 +167,7 @@ void printWelcomeReceipt()
  */
 String getPaymentItems(String paymentExtraDetails)
 {
-  Serial.println("Payment extra details: " + paymentExtraDetails);
+  Serial.println("getting payment items Payment extra details: " + paymentExtraDetails);
   DynamicJsonDocument doc(4096);
   DeserializationError error = deserializeJson(doc, paymentExtraDetails);
   if (error)
@@ -161,7 +237,8 @@ Thank you!
     time = unixTimeStampToDateTime(time.toInt());
 
     String memo = lastPayment["memo"].as<String>();
-    String fiatTotal = memo.substring(0, memo.indexOf(" "));
+    String fiatTotal = memo.substring(1, memo.indexOf(" "));
+
     int amountMSats = lastPayment["amount"].as<int>();
 
     String tag = lastPayment["extra"]["tag"].as<String>();
@@ -171,39 +248,23 @@ Thank you!
     float walletFiatAmount = 0;
     String walletFiatCurrency = "";
 
-    if (lastPayment["extra"]["wallet_fiat_amount"].is<float>())
-    {
-      walletFiatAmount = lastPayment["extra"]["wallet_fiat_amount"].as<float>();
-      fiatTotal = String(walletFiatAmount, 2);
-    }
-    if (lastPayment["extra"]["wallet_fiat_currency"].is<String>())
-    {
-      walletFiatCurrency = lastPayment["extra"]["wallet_fiat_currency"].as<String>();
-    }
-    // if extras.details exists, get the itemsDetail
-    String itemsDetail = "";
-    if (lastPayment["extra"]["details"].is<String>())
-    {
-      Serial.println("Getting items from extra.details" + lastPayment["extra"]["details"].as<String>());
-      itemsDetail = "\r\n" + getPaymentItems(lastPayment["extra"]["details"].as<String>());
-    }
+    String extraDetails = lastPayment["extra"]["details"];
 
-    // if extra.wallet_fiat_rate exists, convert to currency per bitcoin
+    Serial.println("extraDetails: " + extraDetails);
+
+    walletFiatCurrency = getCurrency(extraDetails);
+    
     String fiatExchangeRate = "";
     float walletFiatRate = 0;
-    if (lastPayment["extra"]["wallet_fiat_rate"].is<float>())
-    {
-      walletFiatRate = lastPayment["extra"]["wallet_fiat_rate"].as<float>();
-      // this is sats per currency unit, convert to currency per bitcoin (100,000,000 sats)
-      float fiatExchangeRateFloat = 100000000 / walletFiatRate;
-      fiatExchangeRate = formatNumber(fiatExchangeRateFloat);
-    }
+    walletFiatRate = getExchangeRate(extraDetails);
+    fiatExchangeRate = formatNumber(walletFiatRate);
+
     // if we have a walletFiatRate (sats per currency unit), create a subTotalMSats fiat value
     String subTotalFiat = "";
     String tipsFiat = "";
-    if (walletFiatRate > 0)
+    if (walletFiatRate > 0 && amountMSats > 0)
     {
-      float subTotalFiatFloat = (amountMSats / 1000 - tipAmount) / walletFiatRate;
+      float subTotalFiatFloat = (static_cast<float>(amountMSats) / 1000 - tipAmount) / 100000000 * walletFiatRate;
       Serial.println("subTotalFiatFloat: " + String(subTotalFiatFloat));
       subTotalFiat = String(subTotalFiatFloat, 2);
       subTotalFiat += " " + walletFiatCurrency;
@@ -212,6 +273,11 @@ Thank you!
       tipsFiat = String(tipsFiatFloat, 2);
       tipsFiat += " " + walletFiatCurrency;
     }
+
+    // if extras.details exists, get the itemsDetail
+    String itemsDetail = "";
+    Serial.println("Getting items from extra.details" + extraDetails);
+    itemsDetail = "\r\n" + getPaymentItems(extraDetails);
 
     // search and replace in receipt
     receipt.replace("$$companyName", companyName);
@@ -239,10 +305,12 @@ Thank you!
 
     Serial.print(receipt);
 
-    printer.wake();
-    printer.print(receipt);
-
-    printer.sleep();
+    if (!printToSerialOnly)
+    {
+      printer.wake();
+      printer.print(receipt);
+      printer.sleep();
+    }
   }
   hasReceiptToPrint = false;
 }
@@ -250,32 +318,32 @@ Thank you!
 void printTestReceipt()
 {
   String paymentJson = R"(
-    {
-    "checking_id":"93aa22184ed9e0c577dc8b67523425c9b6056019c0c624d03785b55aa968154e",
-    "pending":false,
-    "amount":33913000,
-    "fee":0,
-    "memo":"€11.00 to Test",
-    "time":1700823047,
-    "bolt11":"lnbc339130n1pjkpqq8dq6u2p2cvf39ccrqgr5dus9getnwsxqz4usp5gvtfqs0e7ektphdc909jwv2kyyf3py5tfx9shtlm6338fdyxkrmspp5jw4zyxzwm8sv2a7u3dn4ydp9exmq2cqecrrzf5phsk6442tgz48qgv3atsymxs3chq24c9wqgwl3vh0cc0l3uvztsr365ft6lq35dg74ycazd9f77rc48aeywsswhl5x4e4zquxhelmen0yqt2zlps80u3gqj6ztam",
-    "preimage":"0000000000000000000000000000000000000000000000000000000000000000",
-    "payment_hash":"93aa22184ed9e0c577dc8b67523425c9b6056019c0c624d03785b55aa968154e",
-    "expiry":1700823747.0,
-    "extra":{
-       "tag":"tpos",
-       "tipAmount":1615,
-       "tposId":"4qJSDrSf9peoV9iMqvmpBT",
-       "amount":32298,
-       "details":"{\"currency\":\"EUR\",\"exchangeRate\":2936.091232785993,\"items\":[{\"image\":null,\"price\":3,\"title\":\"Test Item 1\",\"description\":null,\"tax\":null,\"disabled\":false,\"formattedPrice\":\"€3.00\",\"id\":24,\"quantity\":2},{\"image\":\"\",\"price\":5,\"title\":\"New Beer\",\"description\":null,\"tax\":null,\"disabled\":false,\"formattedPrice\":\"€5.00\",\"id\":25,\"quantity\":1}]}",
-       "wallet_fiat_currency":"EUR",
-       "wallet_fiat_amount":11.745,
-       "wallet_fiat_rate":2887.5556406306177
+  {
+  "wallet_balance": 416511,
+  "payment": {
+    "checking_id": "59a1544d23846b8c2d6efaf7dbbc4fd216e54d5d7f8440d6829dcc5126828b98",
+    "pending": false,
+    "amount": 7951000,
+    "fee": 0,
+    "memo": "€3.10 to Cake and Coffee",
+    "time": 1705581662,
+    "bolt11": "lnbc79510n1pj6j8zusp5fjkgksphs5vf2sdhtr4eqyyskzmvdxz9en0v7jdmmde06j5uurlqpp5txs4gnfrs34ccttwltmah0z06gtw2n2a07zyp45znhx9zf5z3wvqdp2u2p2cvewxyczqar0yppkz6m9ypskuepqgdhkven9v5xqzjccqpjrzjqdva2ltch9a03q8jlmxye9awwsqxfkgjge4nr0hdj5lvg865yn7jkz7pqqqq9hsqqyqqqqqqqqqqqqgqyg9qxpqysgq9qj8qzm02lk8jemd9wtj745zpvxmkd3adlz5zrw8w4g4we4930uy6vrwgxgrm070xclf2d83g8fe4g68j00wzr9j52d44hk3haeg4mspjjstz4",
+    "preimage": "0000000000000000000000000000000000000000000000000000000000000000",
+    "payment_hash": "59a1544d23846b8c2d6efaf7dbbc4fd216e54d5d7f8440d6829dcc5126828b98",
+    "expiry": 1705582260,
+    "extra": {
+      "tag": "tpos",
+      "tipAmount": 0,
+      "tposId": "FZVreZvcnnjbuqBX3EoKpY",
+      "amount": false,
+      "details": "{\"currency\":\"EUR\",\"exchangeRate\":2564.6076289048888,\"items\":[{\"price\":3.1,\"formattedPrice\":\"€3.10\",\"quantity\":1,\"title\":\"Coffee and Walnut cake\",\"tax\":10}]}"
     },
-    "wallet_id":"9fdb75d4e4ab480d88b1cd1defd35903",
-    "webhook":"None",
-    "webhook_status":"None"
- }
-    )";
+    "wallet_id": "845ad088a1604d96ba039b7d6efe87ab",
+    "webhook": null,
+    "webhook_status": null
+    }
+  }
+)";
 
   DynamicJsonDocument doc(4096);
   // load into json doc and capture error

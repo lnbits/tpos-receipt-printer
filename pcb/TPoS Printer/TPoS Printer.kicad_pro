@@ -428,7 +428,7 @@
       "idf": "",
       "netlist": "",
       "specctra_dsn": "",
-      "step": "TPoS Printer.step",
+      "step": "../../../../../Desktop/TPoS Printer.step",
       "vrml": ""
     },
     "page_layout_descr_file": ""

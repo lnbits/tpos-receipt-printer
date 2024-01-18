@@ -3,9 +3,11 @@
 
 const bool includeQuotes = true; // Add Satoshi quotes to the receipt
 const char* companyName = "LNbits Shop";
-const char* ssid = "PLUSNET-MWC9Q2";
-const char* password = "4NyMeXtNcQ6rqP";
+const char* ssid = "Maddox Guest";
+const char* password = "MadGuest1";
 const char* host = "legend.lnbits.com";
-const char* walletId = "6db1907839e140d882ee6dd698e1d6d9";
+const char* walletId = "845ad088a1604d96ba039b7d6efe87ab";
+
+const bool printToSerialOnly = false; // Set to true to only print to serial monitor for debugging
 
 #endif
