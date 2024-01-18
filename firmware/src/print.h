@@ -194,7 +194,8 @@ String getPaymentItems(String paymentExtraDetails)
     String title = item["title"].as<String>();
     int quantity = item["quantity"].as<int>();
     float price = item["price"].as<float>();
-    itemsString += title + " x " + String(quantity) + "   " + String(price) + "\n";
+    float totalPrice = quantity * price;
+    itemsString += title + " x " + String(quantity) + "   " + String(totalPrice) + "\n";
   }
   Serial.println("Items: " + itemsString);
   return itemsString;
@@ -237,6 +238,7 @@ Thank you!
     time = unixTimeStampToDateTime(time.toInt());
 
     String memo = lastPayment["memo"].as<String>();
+    
     String fiatTotal = memo.substring(1, memo.indexOf(" "));
 
     int amountMSats = lastPayment["amount"].as<int>();

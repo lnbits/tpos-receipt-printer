@@ -129,7 +129,7 @@ void setup() {
   printer.begin();
   printWelcomeReceipt();
 
-  printTestReceipt();
+  // printTestReceipt();
   
   // Connect to WiFi
   WiFi.begin(ssid, password);
