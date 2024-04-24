@@ -4,6 +4,9 @@ This project features an ESP32 controlled thermal printer solution to print paym
 
 The project is fully inspired by the [Coinos printer](coinos/coinos-printer) project.
 
+<img src="https://github.com/lnbits/tpos-receipt-printer/assets/63317640/c383d7e6-6ce8-4b73-9cd5-cf7f565e3066" width="400">
+
+
 ## Setup
 
 Connect the printer to the ESP32 as follows.
