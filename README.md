@@ -4,6 +4,22 @@ This project features an ESP32 controlled thermal printer solution to print paym
 
 The project is fully inspired by the [Coinos printer](coinos/coinos-printer) project.
 
+## Flash firmware to the ESP32-C3
+
+You will need:
+
++ Visual Studio Code with the platformio extension installed
++ Your ESP32-C3 board
++ A USB-C cable.
+
+1. Open VS Code and open the `firmware` directory that is in this repo. Platformio will initialise the project and load all required dependencies.
+1. Copy the file config.h.example to config.h and edit the variables in the file to your own values:
+1. Connect your ESP32 board to your computer using the USB-C cable
+1. Click the Upload button (the right facing arrow in the footer of the VS code IDE)
+![pio upload](pio-upload.png "pio upload")
+1. After flashing, your printer will connect to WiFi and print a short status message.
+
+
 ## Setup
 
 Connect the printer to the ESP32 as follows.
