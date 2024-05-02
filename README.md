@@ -2,7 +2,14 @@
 
 This project features an ESP32 controlled thermal printer solution to print payment receipts as payments are made to the LNbits TPoS extension.
 
-The project is fully inspired by the [Coinos printer](coinos/coinos-printer) project.
+Buy a complete kit on the LNbits shop: https://shop.lnbits.com/product/lnbits-tpos-thermal-receipt-printer
+
+The project is fully inspired by the [Coinos printer](https://github.com/coinos/coinos-printer) project.
+
+## Parts
+
+1. An ESP32. This project used an ESP32-C3 SuperMini but any ESP32 will do as long as you can smush it into an enclosure
+1. A 58mm Embedded Thermal Printer with TTL interface
 
 ## Flash firmware to the ESP32-C3
 
